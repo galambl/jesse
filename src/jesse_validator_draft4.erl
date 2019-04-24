@@ -957,6 +957,18 @@ check_format(Value, _Format = <<"date-time">>, State) when is_binary(Value) ->
     true  -> State;
     false -> handle_data_invalid(?wrong_format, Value, State)
   end;
+check_format(Value, _Format = <<"time">>, State) when is_binary(Value) ->
+  %% this format is available from JSON Schema Draft 7
+  case valid_time(Value) of
+    true  -> State;
+    false -> handle_data_invalid(?wrong_format, Value, State)
+  end;
+check_format(Value, _Format = <<"date">>, State) when is_binary(Value) ->
+  %% this format is available from JSON Schema Draft 7
+  case valid_date(Value) of
+    true  -> State;
+    false -> handle_data_invalid(?wrong_format, Value, State)
+  end;
 check_format(Value, _Format = <<"email">>, State) when is_binary(Value) ->
   case re:run(Value, <<"^[^@]+@[^@]+$">>, [{capture, none}, unicode]) of
     match   -> State;
@@ -1364,6 +1376,24 @@ remove_last_from_path(State) ->
 %% @private
 valid_datetime(DateTimeBin) ->
   case rfc3339:parse(DateTimeBin) of
+    {ok, _} ->
+      true;
+    _ ->
+      false
+  end.
+
+%% @private
+valid_time(TimeBin) ->
+  case rfc3339:parse(<<"1970-01-01T", TimeBin/binary>>) of
+    {ok, _} ->
+      true;
+    _ ->
+      false
+  end.
+
+%% @private
+valid_date(DateBin) ->
+  case rfc3339:parse(<<DateBin/binary, "T00:00:00.000Z">>) of
     {ok, _} ->
       true;
     _ ->
