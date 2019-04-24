@@ -127,10 +127,7 @@ new(JsonSchema, Options) ->
                                      , Options
                                      , 0
                                      ),
-  MetaSchemaVer = jesse_json_path:value( ?SCHEMA
-                                       , JsonSchema
-                                       , ?default_schema_ver
-                                       ),
+  MetaSchemaVer = get_value([?SCHEMA, ?SCHEMA_B], JsonSchema, ?default_schema_ver),
   DefaultSchemaVer = proplists:get_value( default_schema_ver
                                         , Options
                                         , MetaSchemaVer
@@ -215,7 +212,7 @@ resolve_ref(State, Reference) ->
           jesse_error:handle_schema_invalid({?schema_not_found, CanonicalReference}, State);
         RemoteSchema ->
           SchemaVer =
-            jesse_json_path:value(?SCHEMA, RemoteSchema, ?default_schema_ver),
+            get_value([?SCHEMA, ?SCHEMA_B], RemoteSchema, ?default_schema_ver),
           NewState = State#state{ root_schema = RemoteSchema
                                 , id = BaseURI
                                 , default_schema_ver = SchemaVer
@@ -393,3 +390,7 @@ load_schema(#state{schema_loader_fun = LoaderFun}, SchemaURI) ->
 %% @private
 get_external_validator(#state{external_validator = Fun}) ->
   Fun.
+
+get_value([], _JsonSchema, Default) -> Default;
+get_value([Key | Keys], JsonSchema, Default) ->
+  jesse_json_path:value(Key, JsonSchema, get_value(Keys, JsonSchema, Default)).

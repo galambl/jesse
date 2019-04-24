@@ -232,6 +232,7 @@ map_schema_test() ->
 map_schema_test_draft(URI) ->
   Schema = #{ <<"$schema">> => URI
             , <<"type">> => <<"object">>
+            , <<"required">> => [<<"foo">>]
             , <<"properties">> =>
                 #{ <<"foo">> =>
                      #{ <<"type">> => <<"object">>
@@ -253,6 +254,78 @@ map_schema_test_draft(URI) ->
   ?assertEqual({ok, ValidJson} ,
                jesse_schema_validator:validate(Schema, ValidJson, [])),
 
+  Schema2 = #{ '$schema' => URI
+             , 'type' => 'object'
+             , 'required' => [<<"foo">>]
+             , 'properties' =>
+                 #{ <<"foo">> =>
+                      #{ 'type' => 'object'
+                       , 'properties' =>
+                           #{ <<"subfoo">> => #{ 'type' => 'integer'
+                                               }
+                            }
+                       }
+                  }
+             , 'patternProperties' =>
+                 #{ <<"^b">> => #{ 'type' => 'integer'
+                                 }
+                  }
+             },
+  ValidJson2 = {[ {<<"foo">>, {[ {<<"subfoo">>, 42} ]}}
+                , {<<"bar">>, 42}
+                , {<<"baz">>, 42}
+                ]},
+  ?assertEqual({ok, ValidJson2} ,
+               jesse_schema_validator:validate(Schema2, ValidJson2, [])),
+
+  Schema3 = #{ '$schema' => URI
+             , 'type' => 'object'
+             , 'required' => ['foo']
+             , 'properties' =>
+                 #{ 'foo' =>
+                      #{ 'type' => 'object'
+                       , 'properties' =>
+                           #{ 'subfoo' => #{ 'type' => 'integer'
+                                               }
+                            }
+                       }
+                  }
+             , 'patternProperties' =>
+                 #{ '^b' => #{ 'type' => 'integer'
+                                 }
+                  }
+             },
+  ValidJson3 = {[ {<<"foo">>, {[ {<<"subfoo">>, 42} ]}}
+                , {<<"bar">>, 42}
+                , {<<"baz">>, 42}
+                ]},
+  ?assertEqual({ok, ValidJson3} ,
+               jesse_schema_validator:validate(Schema3, ValidJson3, [])),
+
+  Schema4 = #{ '$schema' => URI
+             , 'type' => 'object'
+             , 'required' => [<<"foo">>]
+             , 'properties' =>
+                 #{ <<"foo">> =>
+                      #{ <<"type">> => 'object'
+                       , 'properties' =>
+                           #{ 'subfoo' => #{ 'type' => <<"integer">>
+                                               }
+                            }
+                       }
+                  }
+             , 'patternProperties' =>
+                 #{ '^b' => #{ 'type' => <<"integer">>
+                                 }
+                  }
+             },
+  ValidJson4 = {[ {<<"foo">>, {[ {'subfoo', 42} ]}}
+                , {'bar', 42}
+                , {<<"baz">>, 42}
+                ]},
+  ?assertEqual({ok, ValidJson4} ,
+               jesse_schema_validator:validate(Schema4, ValidJson4, [])),
+
   InvalidJson = {[ {<<"bar">>, <<"str expect int">>} ]},
   ?assertThrow([{ data_invalid
                 , #{<<"type">> := <<"integer">>}
@@ -260,7 +333,29 @@ map_schema_test_draft(URI) ->
                 , <<"str expect int">>
                 , [<<"bar">>]
                 }],
-               jesse_schema_validator:validate(Schema, InvalidJson, [])).
+               jesse_schema_validator:validate(Schema, InvalidJson, [])),
+  ?assertThrow([{ data_invalid
+                , #{'type' := 'integer'}
+                , wrong_type
+                , <<"str expect int">>
+                , [<<"bar">>]
+                }],
+               jesse_schema_validator:validate(Schema2, InvalidJson, [])),
+  ?assertThrow([{ data_invalid
+                , #{'type' := 'integer'}
+                , wrong_type
+                , <<"str expect int">>
+                , [<<"bar">>]
+                }],
+               jesse_schema_validator:validate(Schema3, InvalidJson, [])),
+  ?assertThrow([{ data_invalid
+                , #{'type' := <<"integer">>}
+                , wrong_type
+                , <<"str expect int">>
+                , [<<"bar">>]
+                }],
+               jesse_schema_validator:validate(Schema4, InvalidJson, [])).
+
 
 
 map_data_test() ->
@@ -299,6 +394,35 @@ map_data_test_draft(URI) ->
                },
   ?assertEqual( {ok, ValidJson}
               , jesse_schema_validator:validate(Schema, ValidJson, [])
+              ),
+  
+  Schema2 = {[ {'$schema', URI}
+            , {'type', 'object'}
+            , {'properties'
+              , {[{ 'foo'
+                  , {[ {'type', 'object'}
+                     , { 'properties'
+                       , {[{ 'subfoo'
+                           , {[{ 'type'
+                               , 'integer'
+                               }]}
+                           }]}
+                       }
+                     ]}
+                  }
+                 ]}
+              }
+            , { 'patternProperties'
+              , {[{ '^b'
+                  , {[{'type', 'integer'}]}
+                  }]}}
+            ]},
+  ValidJson2 = #{ 'foo' => #{'subfoo' => 42}
+               , 'bar' => 42
+               , 'baz' => 42
+               },
+  ?assertEqual( {ok, ValidJson2}
+              , jesse_schema_validator:validate(Schema2, ValidJson2, [])
               ),
 
   InvalidJson = #{ <<"foo">> => 42
