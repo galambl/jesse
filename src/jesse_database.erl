@@ -305,7 +305,8 @@ get_schema_info(File, {Acc, ParseFun}) ->
 %% @private
 -spec get_schema_id(Schema :: jesse:json_term()) -> string() | undefined.
 get_schema_id(Schema) ->
-  case jesse_json_path:value(?ID, Schema, undefined) of
+  case jesse_json_path:value(?ID, Schema,
+    jesse_json_path:value(?ID_B, Schema, undefined)) of
     undefined ->
       undefined;
     Id ->

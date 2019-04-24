@@ -62,7 +62,7 @@ validate_with_state(JsonSchema, Value, State) ->
 %% otherwise the default schema version from `State' is returned.
 %% @private
 get_schema_ver(JsonSchema, State) ->
-  case jesse_json_path:value(?SCHEMA, JsonSchema, ?not_found) of
+  case get_value([?SCHEMA, ?SCHEMA_B], JsonSchema, ?not_found) of
     ?not_found -> jesse_state:get_default_schema_ver(State);
     SchemaVer  -> SchemaVer
   end.
@@ -91,3 +91,7 @@ select_and_run_validator(?json_schema_draft4, JsonSchema, Value, State) ->
                                       );
 select_and_run_validator(SchemaURI, _JsonSchema, _Value, State) ->
   jesse_error:handle_schema_invalid({?schema_unsupported, SchemaURI}, State).
+
+get_value([], _JsonSchema, Default) -> Default;
+get_value([Key | Keys], JsonSchema, Default) ->
+  jesse_json_path:value(Key, JsonSchema, get_value(Keys, JsonSchema, Default)).

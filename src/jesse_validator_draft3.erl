@@ -62,17 +62,20 @@
                  , JsonSchema :: jesse:schema()
                  , State :: jesse_state:state()
                  ) -> jesse_state:state() | no_return().
-check_value(Value, [{?REF, RefSchemaURI} | Attrs], State) ->
+check_value(Value, [{FieldType, RefSchemaURI} | Attrs], State)
+  when ?IS_REF(FieldType) ->
   case Attrs of
     [] ->
       validate_ref(Value, RefSchemaURI, State);
     _ ->
       handle_schema_invalid(?only_ref_allowed, State)
   end;
-check_value(Value, [{?TYPE, Type} | Attrs], State) ->
+check_value(Value, [{FieldType, Type} | Attrs], State)
+  when ?IS_TYPE(FieldType) ->
   NewState = check_type(Value, Type, State),
   check_value(Value, Attrs, NewState);
-check_value(Value, [{?PROPERTIES, Properties} | Attrs], State) ->
+check_value(Value, [{FieldType, Properties} | Attrs], State)
+  when ?IS_PROPERTIES(FieldType) ->
   NewState = case jesse_lib:is_json_object(Value) of
                true  -> check_properties( Value
                                         , unwrap(Properties)
@@ -82,9 +85,9 @@ check_value(Value, [{?PROPERTIES, Properties} | Attrs], State) ->
              end,
   check_value(Value, Attrs, NewState);
 check_value( Value
-           , [{?PATTERNPROPERTIES, PatternProperties} | Attrs]
+           , [{FieldType, PatternProperties} | Attrs]
            , State
-           ) ->
+           ) when ?IS_PATTERNPROPERTIES(FieldType) ->
   NewState = case jesse_lib:is_json_object(Value) of
                true  -> check_pattern_properties( Value
                                                 , PatternProperties
@@ -94,9 +97,9 @@ check_value( Value
              end,
   check_value(Value, Attrs, NewState);
 check_value( Value
-           , [{?ADDITIONALPROPERTIES, AdditionalProperties} | Attrs]
+           , [{FieldType, AdditionalProperties} | Attrs]
            , State
-           ) ->
+           ) when ?IS_ADDITIONALPROPERTIES(FieldType) ->
   NewState = case jesse_lib:is_json_object(Value) of
                true  -> check_additional_properties( Value
                                                    , AdditionalProperties
@@ -105,7 +108,8 @@ check_value( Value
                false -> State
        end,
   check_value(Value, Attrs, NewState);
-check_value(Value, [{?ITEMS, Items} | Attrs], State) ->
+check_value(Value, [{FieldType, Items} | Attrs], State)
+  when ?IS_ITEMS(FieldType) ->
   NewState = case jesse_lib:is_array(Value) of
                true  -> check_items(Value, Items, State);
                false -> State
@@ -114,37 +118,45 @@ check_value(Value, [{?ITEMS, Items} | Attrs], State) ->
 %% doesn't really do anything, since this attribute will be handled
 %% by the previous function clause if it's presented in the schema
 check_value( Value
-           , [{?ADDITIONALITEMS, _AdditionalItems} | Attrs]
+           , [{FieldType, _AdditionalItems} | Attrs]
            , State
-           ) ->
+           ) when ?IS_ADDITIONALITEMS(FieldType) ->
   check_value(Value, Attrs, State);
 %% doesn't really do anything, since this attribute will be handled
 %% by the previous function clause if it's presented in the schema
-check_value(Value, [{?REQUIRED, _Required} | Attrs], State) ->
+check_value(Value, [{FieldType, _Required} | Attrs], State)
+  when ?IS_REQUIRED(FieldType) ->
   check_value(Value, Attrs, State);
-check_value(Value, [{?DEPENDENCIES, Dependencies} | Attrs], State) ->
+check_value(Value, [{FieldType, Dependencies} | Attrs], State)
+  when ?IS_DEPENDENCIES(FieldType) ->
   NewState = case jesse_lib:is_json_object(Value) of
                true  -> check_dependencies(Value, Dependencies, State);
                false -> State
              end,
   check_value(Value, Attrs, NewState);
-check_value(Value, [{?MINIMUM, Minimum} | Attrs], State) ->
+check_value(Value, [{FieldType, Minimum} | Attrs], State)
+  when ?IS_MINIMUM(FieldType) ->
   NewState = case is_number(Value) of
                true  ->
-                 ExclusiveMinimum = get_value( ?EXCLUSIVEMINIMUM
-                                             , get_current_schema(State)
-                                             ),
+                 ExclusiveMinimum =
+                   get_value( [?EXCLUSIVEMINIMUM, ?EXCLUSIVEMINIMUM_B]
+                            , get_current_schema(State)
+                            , ?not_found
+                            ),
                  check_minimum(Value, Minimum, ExclusiveMinimum, State);
                false ->
                  State
              end,
   check_value(Value, Attrs, NewState);
-check_value(Value, [{?MAXIMUM, Maximum} | Attrs], State) ->
+check_value(Value, [{FieldType, Maximum} | Attrs], State)
+  when ?IS_MAXIMUM(FieldType) ->
   NewState = case is_number(Value) of
                true  ->
-                 ExclusiveMaximum = get_value( ?EXCLUSIVEMAXIMUM
-                                             , get_current_schema(State)
-                                             ),
+                 ExclusiveMaximum =
+                   get_value( [?EXCLUSIVEMAXIMUM, ?EXCLUSIVEMAXIMUM_B]
+                            , get_current_schema(State)
+                            , ?not_found
+                            ),
                  check_maximum(Value, Maximum, ExclusiveMaximum, State);
                false ->
                  State
@@ -153,69 +165,80 @@ check_value(Value, [{?MAXIMUM, Maximum} | Attrs], State) ->
 %% doesn't really do anything, since this attribute will be handled
 %% by the previous function clause if it's presented in the schema
 check_value( Value
-           , [{?EXCLUSIVEMINIMUM, _ExclusiveMinimum} | Attrs]
+           , [{FieldType, _ExclusiveMinimum} | Attrs]
            , State
-           ) ->
+           ) when ?IS_EXCLUSIVEMINIMUM(FieldType) ->
   check_value(Value, Attrs, State);
 %% doesn't really do anything, since this attribute will be handled
 %% by the previous function clause if it's presented in the schema
 check_value( Value
-           , [{?EXCLUSIVEMAXIMUM, _ExclusiveMaximum} | Attrs]
+           , [{FieldType, _ExclusiveMaximum} | Attrs]
            , State
-           ) ->
+           ) when ?IS_EXCLUSIVEMAXIMUM(FieldType) ->
   check_value(Value, Attrs, State);
-check_value(Value, [{?MINITEMS, MinItems} | Attrs], State) ->
+check_value(Value, [{FieldType, MinItems} | Attrs], State)
+  when ?IS_MINITEMS(FieldType) ->
   NewState = case jesse_lib:is_array(Value) of
                true  -> check_min_items(Value, MinItems, State);
                false -> State
              end,
   check_value(Value, Attrs, NewState);
-check_value(Value, [{?MAXITEMS, MaxItems} | Attrs], State) ->
+check_value(Value, [{FieldType, MaxItems} | Attrs], State)
+  when ?IS_MAXITEMS(FieldType) ->
   NewState = case jesse_lib:is_array(Value) of
                true  -> check_max_items(Value, MaxItems, State);
                false -> State
              end,
   check_value(Value, Attrs, NewState);
-check_value(Value, [{?UNIQUEITEMS, Uniqueitems} | Attrs], State) ->
+check_value(Value, [{FieldType, Uniqueitems} | Attrs], State)
+  when ?IS_UNIQUEITEMS(FieldType) ->
   NewState = case jesse_lib:is_array(Value) of
                true  -> check_unique_items(Value, Uniqueitems, State);
                false -> State
              end,
   check_value(Value, Attrs, NewState);
-check_value(Value, [{?PATTERN, Pattern} | Attrs], State) ->
+check_value(Value, [{FieldType, Pattern} | Attrs], State)
+  when ?IS_PATTERN(FieldType) ->
   NewState = case is_binary(Value) of
                true  -> check_pattern(Value, Pattern, State);
                false -> State
              end,
   check_value(Value, Attrs, NewState);
-check_value(Value, [{?MINLENGTH, MinLength} | Attrs], State) ->
+check_value(Value, [{FieldType, MinLength} | Attrs], State)
+  when ?IS_MINLENGTH(FieldType) ->
   NewState = case is_binary(Value) of
                true  -> check_min_length(Value, MinLength, State);
                false -> State
   end,
   check_value(Value, Attrs, NewState);
-check_value(Value, [{?MAXLENGTH, MaxLength} | Attrs], State) ->
+check_value(Value, [{FieldType, MaxLength} | Attrs], State)
+  when ?IS_MAXLENGTH(FieldType) ->
   NewState = case is_binary(Value) of
                true  -> check_max_length(Value, MaxLength, State);
                false -> State
              end,
   check_value(Value, Attrs, NewState);
-check_value(Value, [{?ENUM, Enum} | Attrs], State) ->
+check_value(Value, [{FieldType, Enum} | Attrs], State)
+  when ?IS_ENUM(FieldType) ->
   NewState = check_enum(Value, Enum, State),
   check_value(Value, Attrs, NewState);
-check_value(Value, [{?FORMAT, Format} | Attrs], State) ->
+check_value(Value, [{FieldType, Format} | Attrs], State)
+  when ?IS_FORMAT(FieldType) ->
   NewState = check_format(Value, Format, State),
   check_value(Value, Attrs, NewState);
-check_value(Value, [{?DIVISIBLEBY, DivisibleBy} | Attrs], State) ->
+check_value(Value, [{FieldType, DivisibleBy} | Attrs], State)
+  when ?IS_DIVISIBLEBY(FieldType) ->
   NewState = case is_number(Value) of
                true  -> check_divisible_by(Value, DivisibleBy, State);
                false -> State
              end,
   check_value(Value, Attrs, NewState);
-check_value(Value, [{?DISALLOW, Disallow} | Attrs], State) ->
+check_value(Value, [{FieldType, Disallow} | Attrs], State)
+  when ?IS_DISALLOW(FieldType) ->
   NewState = check_disallow(Value, Disallow, State),
   check_value(Value, Attrs, NewState);
-check_value(Value, [{?EXTENDS, Extends} | Attrs], State) ->
+check_value(Value, [{FieldType, Extends} | Attrs], State)
+  when ?IS_EXTENDS(FieldType) ->
   NewState = check_extends(Value, Extends, State),
   check_value(Value, Attrs, NewState);
 check_value(Value, [], State) ->
@@ -291,14 +314,17 @@ check_type(Value, Type, State) ->
   end.
 
 %% @private
-is_type_valid(Value, ?STRING, _State)  -> is_binary(Value);
-is_type_valid(Value, ?NUMBER, _State)  -> is_number(Value);
-is_type_valid(Value, ?INTEGER, _State) -> is_integer(Value);
-is_type_valid(Value, ?BOOLEAN, _State) -> is_boolean(Value);
-is_type_valid(Value, ?OBJECT, _State)  -> jesse_lib:is_json_object(Value);
-is_type_valid(Value, ?ARRAY, _State)   -> jesse_lib:is_array(Value);
-is_type_valid(Value, ?NULL, _State)    -> jesse_lib:is_null(Value);
-is_type_valid(_Value, ?ANY, _State)    -> true;
+is_type_valid(Value, Type, _State) when ?IS_STRING(Type)  -> is_binary(Value);
+is_type_valid(Value, Type, _State) when ?IS_NUMBER(Type)  -> is_number(Value);
+is_type_valid(Value, Type, _State) when ?IS_INTEGER(Type) -> is_integer(Value);
+is_type_valid(Value, Type, _State) when ?IS_BOOLEAN(Type) -> is_boolean(Value);
+is_type_valid(Value, Type, _State) when ?IS_OBJECT(Type)  ->
+  jesse_lib:is_json_object(Value);
+is_type_valid(Value, Type, _State) when ?IS_ARRAY(Type)   ->
+  jesse_lib:is_array(Value);
+is_type_valid(Value, Type, _State) when ?IS_NULL(Type)    ->
+  jesse_lib:is_null(Value);
+is_type_valid(_Value, Type, _State) when ?IS_ANY(Type)    -> true;
 is_type_valid(Value, UnionType, State) ->
   case jesse_lib:is_array(UnionType) of
     true  -> check_union_type(Value, UnionType, State);
@@ -351,7 +377,7 @@ wrong_type(Value, State) ->
 check_properties(Value, Properties, State) ->
   TmpState
     = lists:foldl( fun({PropertyName, PropertySchema}, CurrentState) ->
-                       case get_value(PropertyName, Value) of
+                       case get_value(PropertyName, Value, ?not_found) of
                          ?not_found ->
 %% @doc 5.7.  required
 %%
@@ -359,7 +385,8 @@ check_properties(Value, Properties, State) ->
 %% be undefined.  This is false by default, making the instance
 %% optional.
 %% @end
-                           case get_value(?REQUIRED, PropertySchema) of
+                           case get_value([?REQUIRED, ?REQUIRED_B], PropertySchema,
+                                          ?not_found) of
                              true ->
                                NewState = set_current_schema( CurrentState
                                                             , PropertySchema
@@ -408,7 +435,8 @@ check_pattern_properties(Value, PatternProperties, State) ->
   set_current_schema(TmpState, get_current_schema(State)).
 
 %% @private
-check_match({PropertyName, PropertyValue}, {Pattern, Schema}, State) ->
+check_match({PropertyName, PropertyValue}, {Pattern, Schema}, State)
+  when is_binary(Pattern) andalso is_binary(PropertyName) ->
   case re:run(PropertyName, Pattern, [{capture, none}, unicode]) of
     match   ->
       check_value( PropertyName
@@ -418,7 +446,15 @@ check_match({PropertyName, PropertyValue}, {Pattern, Schema}, State) ->
                  );
     nomatch ->
       State
-  end.
+  end;
+check_match({PropertyName0, PropertyValue}, {Pattern0, Schema}, State)
+  when is_atom(Pattern0) orelse is_atom(PropertyName0) ->
+  Pattern = maybe_atom_to_binary(Pattern0),
+  PropertyName = maybe_atom_to_binary(PropertyName0),
+  check_match({PropertyName, PropertyValue}, {Pattern, Schema}, State).
+
+maybe_atom_to_binary(Data) when is_binary(Data) -> Data;
+maybe_atom_to_binary(Data) when is_atom(Data) -> atom_to_binary(Data, utf8).
 
 %% @doc 5.4.  additionalProperties
 %%
@@ -431,9 +467,13 @@ check_match({PropertyName, PropertyValue}, {Pattern, Schema}, State) ->
 %% @private
 check_additional_properties(Value, false, State) ->
   JsonSchema        = get_current_schema(State),
-  Properties        = empty_if_not_found(get_value(?PROPERTIES, JsonSchema)),
-  PatternProperties = empty_if_not_found(get_value( ?PATTERNPROPERTIES
-                                                  , JsonSchema)),
+  Properties        =
+    empty_if_not_found(
+      get_value([?PROPERTIES, ?PROPERTIES_B], JsonSchema, ?not_found)),
+  PatternProperties =
+    empty_if_not_found(
+      get_value( [?PATTERNPROPERTIES, ?PATTERNPROPERTIES_B], JsonSchema,
+        ?not_found)),
   case get_additional_properties(Value, Properties, PatternProperties) of
     []     -> State;
     Extras ->
@@ -453,9 +493,13 @@ check_additional_properties(_Value, true, State) ->
   State;
 check_additional_properties(Value, AdditionalProperties, State) ->
   JsonSchema        = get_current_schema(State),
-  Properties        = empty_if_not_found(get_value(?PROPERTIES, JsonSchema)),
-  PatternProperties = empty_if_not_found(get_value( ?PATTERNPROPERTIES
-                                                  , JsonSchema)),
+  Properties        =
+    empty_if_not_found(
+      get_value([?PROPERTIES, ?PROPERTIES_B], JsonSchema, ?not_found)),
+  PatternProperties =
+    empty_if_not_found(
+      get_value( [?PATTERNPROPERTIES, ?PATTERNPROPERTIES_B], JsonSchema,
+        ?not_found)),
   case get_additional_properties(Value, Properties, PatternProperties) of
     []     -> State;
     Extras ->
@@ -491,7 +535,8 @@ get_additional_properties(Value, Properties, PatternProperties) ->
                            , ExtraNames0
                            , Patterns
                            ),
-  lists:map(fun(Name) -> {Name, get_value(Name, Value)} end, ExtraNames).
+  lists:map(fun(Name) -> {Name, get_value(Name, Value, ?not_found)} end,
+    ExtraNames).
 
 %% @private
 filter_extra_names(Pattern, ExtraNames) ->
@@ -556,7 +601,8 @@ check_items_array(Value, Items, State) ->
 %% to indicate additional items in the array are not allowed, or it can
 %% be a schema that defines the schema of the additional items.
 %% @end
-      case get_value(?ADDITIONALITEMS, JsonSchema) of
+      case get_value([?ADDITIONALITEMS, ?ADDITIONALITEMS_B], JsonSchema,
+                     ?not_found) of
         ?not_found -> State;
         true       -> State;
         false      ->
@@ -613,7 +659,7 @@ check_items_fun(Tuples, State) ->
 %% @private
 check_dependencies(Value, Dependencies, State) ->
   lists:foldl( fun({DependencyName, DependencyValue}, CurrentState) ->
-                   case get_value(DependencyName, Value) of
+                   case get_value(DependencyName, Value, ?not_found) of
                      ?not_found -> CurrentState;
                      _          -> check_dependency_value( Value
                                                          , DependencyName
@@ -629,7 +675,7 @@ check_dependencies(Value, Dependencies, State) ->
 %% @private
 check_dependency_value(Value, _DependencyName, Dependency, State)
   when is_binary(Dependency) ->
-  case get_value(Dependency, Value) of
+  case get_value(Dependency, Value, ?not_found) of
     ?not_found ->
       handle_data_invalid({?missing_dependency, Dependency}, Value, State);
     _          ->
@@ -961,9 +1007,17 @@ is_equal(Value1, Value2) ->
     true  -> compare_objects(Value1, Value2);
     false -> case is_list(Value1) andalso is_list(Value2) of
                true  -> compare_lists(Value1, Value2);
-               false -> Value1 =:= Value2
+               false -> compare_values(Value1, Value2)
              end
   end.
+
+compare_values(Value1, Value2)
+  when is_atom(Value1) andalso is_binary(Value2) ->
+  compare_values(Value1, binary_to_existing_atom(Value2, utf8));
+compare_values(Value1, Value2)
+  when is_binary(Value1) andalso is_atom(Value2) ->
+  compare_values(Value1, atom_to_binary(Value2, utf8));
+compare_values(Value1, Value2) -> Value1 =:= Value2.
 
 %% @private
 compare_lists(Value1, Value2) ->
@@ -990,7 +1044,7 @@ compare_objects(Value1, Value2) ->
 %% @private
 compare_properties(Value1, Value2) ->
   lists:all( fun({PropertyName1, PropertyValue1}) ->
-                 case get_value(PropertyName1, Value2) of
+                 case get_value(PropertyName1, Value2, ?not_found) of
                    ?not_found     -> false;
                    PropertyValue2 -> is_equal(PropertyValue1, PropertyValue2)
                  end
@@ -1001,8 +1055,15 @@ compare_properties(Value1, Value2) ->
 %%=============================================================================
 %% Wrappers
 %% @private
-get_value(Key, Schema) ->
-  jesse_json_path:value(Key, Schema, ?not_found).
+get_value([], _Schema, Default) -> Default;
+get_value([Key | Keys], Schema, Default) ->
+  jesse_json_path:value(Key, Schema, get_value(Keys, Schema, Default));
+
+get_value(Key, Schema, Default) when is_atom(Key) ->
+  jesse_json_path:value(Key, Schema, get_value(
+    atom_to_binary(Key, utf8), Schema, Default));
+get_value(Key, Schema, Default) when is_binary(Key) ->
+  jesse_json_path:value(Key, Schema, Default).
 
 %% @private
 unwrap(Value) ->
@@ -1036,8 +1097,10 @@ empty_if_not_found(Value) ->
   jesse_lib:empty_if_not_found(Value).
 
 %% @private
-add_to_path(State, Property) ->
-  jesse_state:add_to_path(State, Property).
+add_to_path(State, Property) when is_binary(Property) orelse is_integer(Property) ->
+  jesse_state:add_to_path(State, Property);
+add_to_path(State, Property) when is_atom(Property) ->
+  add_to_path(State, atom_to_binary(Property, utf8)).
 
 %% @private
 remove_last_from_path(State) ->
